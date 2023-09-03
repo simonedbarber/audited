@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/jinzhu/gorm"
-	"github.com/qor/audited"
-	"github.com/qor/qor/test/utils"
+	"github.com/simonedbarber/audited"
+	"github.com/simonedbarber/qor/test/utils"
+	"gorm.io/gorm"
 )
 
 type Product struct {

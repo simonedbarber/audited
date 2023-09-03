@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/jinzhu/gorm"
+	"gorm.io/gorm"
 )
 
 type auditableInterface interface {
@@ -14,28 +14,45 @@ type auditableInterface interface {
 	GetUpdatedBy() string
 }
 
-func isAuditable(scope *gorm.Scope) (isAuditable bool) {
-	if scope.GetModelStruct().ModelType == nil {
+func isAuditable(scope *gorm.DB) (isAuditable bool) {
+	// TODO: check if scope.Statement.Schema.ModelType is able to be null as it is a reflect.Type
+	if scope.Statement.Schema.ModelType == nil {
 		return false
 	}
-	_, isAuditable = reflect.New(scope.GetModelStruct().ModelType).Interface().(auditableInterface)
+
+	// TODO: check if scope.Statement.Schema.ModelType is correcthere
+	_, isAuditable = reflect.New(scope.Statement.Schema.ModelType).Interface().(auditableInterface)
 	return
 }
 
-func getCurrentUser(scope *gorm.Scope) (string, bool) {
+func getCurrentUser(scope *gorm.DB) (string, bool) {
 	var user interface{}
 	var hasUser bool
 
-	user, hasUser = scope.DB().Get("audited:current_user")
+	user, hasUser = scope.Get("audited:current_user")
 
 	if !hasUser {
-		user, hasUser = scope.DB().Get("qor:current_user")
+		user, hasUser = scope.Get("qor:current_user")
 	}
 
 	if hasUser {
 		var currentUser string
-		if primaryField := scope.New(user).PrimaryField(); primaryField != nil {
-			currentUser = fmt.Sprintf("%v", primaryField.Field.Interface())
+		// TODO: identify what the new function to get the primary field of a type is
+		// PrioritizedPrimaryField or PrimaryFields candidates may need to define further as there are composite primary key options here
+		// Many need to indirect and get the field value of the primary field where primary key is not already captured
+		/*
+			var currentUser string
+			if primaryField := scope.New(user).PrimaryField(); primaryField != nil {
+				currentUser = fmt.Sprintf("%v", primaryField.Field.Interface())
+			} else {
+				currentUser = fmt.Sprintf("%v", user)
+			}
+		*/
+
+		// Create a new instance of the type of the model user
+		db2 := scope.Session(&gorm.Session{NewDB: true}).Model(user)
+		if primaryField := db2.Statement.Schema.PrioritizedPrimaryField; primaryField != nil {
+			currentUser = fmt.Sprintf("%v", reflect.Indirect(reflect.ValueOf(user)).FieldByName(primaryField.Name).Interface())
 		} else {
 			currentUser = fmt.Sprintf("%v", user)
 		}
@@ -46,15 +63,15 @@ func getCurrentUser(scope *gorm.Scope) (string, bool) {
 	return "", false
 }
 
-func assignCreatedBy(scope *gorm.Scope) {
+func assignCreatedBy(scope *gorm.DB) {
 	if isAuditable(scope) {
 		if user, ok := getCurrentUser(scope); ok {
-			scope.SetColumn("CreatedBy", user)
+			scope.Statement.SetColumn("CreatedBy", user)
 		}
 	}
 }
 
-func assignUpdatedBy(scope *gorm.Scope) {
+func assignUpdatedBy(scope *gorm.DB) {
 	if isAuditable(scope) {
 		if user, ok := getCurrentUser(scope); ok {
 			if attrs, ok := scope.InstanceGet("gorm:update_attrs"); ok {
@@ -62,7 +79,7 @@ func assignUpdatedBy(scope *gorm.Scope) {
 				updateAttrs["updated_by"] = user
 				scope.InstanceSet("gorm:update_attrs", updateAttrs)
 			} else {
-				scope.SetColumn("UpdatedBy", user)
+				scope.Statement.SetColumn("UpdatedBy", user)
 			}
 		}
 	}

@@ -1,15 +1,16 @@
 // Package audited is used to log last UpdatedBy and CreatedBy for your models
 //
-// Github: http://github.com/qor/audited
+// Github: http://github.com/simonedbarber/audited
 package audited
 
 import "fmt"
 
 // AuditedModel make Model Auditable, embed `audited.AuditedModel` into your model as anonymous field to make the model auditable
-//    type User struct {
-//      gorm.Model
-//      audited.AuditedModel
-//    }
+//
+//	type User struct {
+//	  gorm.Model
+//	  audited.AuditedModel
+//	}
 type AuditedModel struct {
 	CreatedBy string
 	UpdatedBy string
